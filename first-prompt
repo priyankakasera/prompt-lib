@@ -1,0 +1,61 @@
+Design a simple internal web app called ReleasePilot that automates our UAT release process on GitLab for Spring Boot services and their Helm chart repos. There is no database — every screen works from application configuration and the current in-progress release only. There is no releases list.
+
+FLOW
+A single release moves through 5 steps, shown as a horizontal stepper at the top of the page:
+
+1. Raise MRs
+   - The service list, repos and branches come from application configuration, shown as a checklist with "Select all".
+   - Each service has two repos: the service repo and its Helm repo. Most repos go master → main; one goes dev → main. Show source → target branch per repo.
+   - Raise MRs, then show conflict status for each.
+   - If a repo's MR has no diff, show "No changes" in that row instead of a conflict status.
+   - If BOTH a service's repos have no changes, exclude that service from the release and show it in a collapsed "Excluded — no changes" list. If only the Helm repo changed, keep the service in.
+
+2. Scope mapping
+   - Business scope is provided as plain text (no ticket IDs) in a text area above this step.
+   - AI splits the scope text into scope items, then reads each remaining service's diffs to find which scope items it covers, shown with evidence (commit messages or files changed), marked "AI suggested" with Accept / Change / Remove.
+   - Two highlighted sections: "Changes outside scope" and "Scope items not found in any service".
+   - "+ Add scope item": lets the developer type a new scope item not in the original text, then manually assign it to one or more services. Custom items are marked "Manually added" instead of "AI suggested".
+
+3. Deployment template (Excel)
+   - Sheet 1 (Summary): every included service, its Helm deployment version (from pom.xml in the Helm repo), and the consolidated release scope.
+   - One sheet per service: its in-scope changes and its Helm deployment version.
+   - Editable preview with tabs at the bottom matching the sheets. Buttons: Download .xlsx, Regenerate, Mark as reviewed.
+
+4. GitLab issue
+   - Creates an issue in the GitLab project from config, with prefilled title/description and the template attached.
+   - Show the issue link on success.
+
+5. Deployer update — three parts, shown as three sub-sections on one screen:
+   a. Version files: table of service, UAT deployment version (from Helm repo pom.xml), and rollback/PROD version. Rollback is auto-fetched from the PROD deployment tasks on main in gitlab-deployer, editable, with a source label ("from gitlab-deployer main" or "edited manually").
+   b. Release file: preview of the release.txt content that will be created, listing every included service and its deployment version, plain text, monospace.
+   c. Deployment tasks: a list of environments from configuration (e.g. UAT, staging, perf), each with a checkbox (all checked by default) — a task entry is added for each selected environment.
+   Below all three: branch name field (release/uat-R-2026.10), a diff preview covering the version files, release.txt and the new task entries, and a commit message field. Button: "Create branch, commit and raise MR". On success, show the MR link.
+
+SCREENS
+
+1. Home / new release
+   - Scope text area (large).
+   - Service checklist with "Select all", sourced from configuration.
+   - Button: "Raise MRs and start release".
+
+2. Release page
+   Stepper at top; panel below changes per step, as described above. State for the current release lives only in this session — no save/resume.
+
+3. Configuration (read-only)
+   - GitLab connection status (never the token).
+   - Configured services: service repo, Helm repo, source branch, target branch.
+   - gitlab-deployer repo, deployment task file paths per environment, release file path.
+   - GitLab project used for issues.
+   - Sample deployment template currently loaded.
+   - No edit or save controls — a note explains these values come from application configuration.
+
+STYLE
+- Light theme, clean developer-tool look, minimal and uncluttered, desktop-first.
+- Monospace for versions, branch names, MR numbers, commit SHAs, file paths and the release.txt preview.
+- Clear status colours: green for done/clean, grey for excluded/no changes, amber for AI suggested or manually added, red for conflicts or blocked.
+- Realistic sample data:
+  - Services: order-service, payment-service, inventory-service, each with a Helm repo like order-service-helm.
+  - Versions like 2.15.0 (UAT) and 2.14.0 (PROD rollback).
+  - Environments: UAT, staging, perf.
+  - Sample scope text: "Add partial refunds to payment flow. Show stock warning on low inventory. Fix order status sync delay."
+  - inventory-service shown as excluded with "No changes" in both repos.
